@@ -1,0 +1,24 @@
+#!/bin/busybox sh
+# Guest PID 1 for the vhost-user-fs check. Prints CHECK lines that run.sh verifies.
+/bin/busybox --install -s /bin
+mount -t proc proc /proc; mount -t sysfs sys /sys; mount -t devtmpfs dev /dev
+check() { if [ "$2" = ok ]; then echo "CHECK $1 ok"; else echo "CHECK $1 FAIL $3"; fi; }
+for d in /sys/bus/virtio/devices/*; do [ "$(cat $d/device)" = 0x001a ] && FOUND=1; done
+check device-type-26 $([ -n "$FOUND" ] && echo ok)
+insmod /lib/modules/virtiofs.ko 2>/dev/null || true   # absent when virtiofs is built in
+if mount -t virtiofs peerfs /mnt; then
+  check mount-by-tag ok
+  check read-host-file $([ "$(cat /mnt/from-host.txt)" = "hello from host" ] && echo ok)
+  echo "written by guest" > /mnt/from-guest.txt
+  mkdir -p /mnt/dir/sub && touch /mnt/dir/sub/a
+  check nested-dirs $([ -f /mnt/dir/sub/a ] && echo ok)
+  dd if=/dev/urandom of=/mnt/big bs=1M count=64 2>/dev/null; sync
+  A=$(md5sum /mnt/big | cut -d' ' -f1); echo 3 > /proc/sys/vm/drop_caches
+  B=$(md5sum /mnt/big | cut -d' ' -f1); echo "BIG $A"
+  check reread-after-drop-caches $([ "$A" = "$B" ] && echo ok)
+  umount /mnt && check unmount ok
+else
+  check mount-by-tag FAIL; dmesg | tail -20
+fi
+echo "GUEST DONE"
+reboot -f   # poweroff only halts the guest; reboot ends the VMM

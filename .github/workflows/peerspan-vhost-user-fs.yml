@@ -1,0 +1,36 @@
+name: peerspan vhost-user-fs
+on:
+  push:
+    branches: [peerspan, 'peerspan/**']
+  workflow_dispatch:
+
+jobs:
+  vhost-user-fs:
+    name: vhost-user-fs against stock virtiofsd (Linux x86_64)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang libclang-dev busybox-static virtiofsd zstd cpio
+
+      - name: Add musl target
+        run: rustup target add x86_64-unknown-linux-musl
+
+      - name: Build libkrun with vhost-user
+        run: make VHOST_USER=1
+
+      - name: Enable KVM group perms
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # The runner's cloud kernel is not a dependable guest; use Ubuntu's generic one.
+      - name: Fetch guest kernel
+        run: echo "GUEST_KERNEL_VERSION=$(peerspan/tests/vhost-user-fs/fetch-ubuntu-kernel.sh "$RUNNER_TEMP/guest")" >> "$GITHUB_ENV"
+
+      - name: Run check
+        run: GUEST_ROOT="$RUNNER_TEMP/guest" RUNS=3 peerspan/tests/vhost-user-fs/run.sh
