@@ -1,7 +1,6 @@
 name: peerspan vhost-user-fs
+# Started by hand only, to keep CI cheap; run tests/vhost-user-fs/run.sh locally otherwise.
 on:
-  push:
-    branches: [peerspan, 'peerspan/**']
   workflow_dispatch:
 
 jobs:
