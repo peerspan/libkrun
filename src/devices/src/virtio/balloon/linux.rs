@@ -2,7 +2,8 @@ use vm_memory::GuestMemoryMmap;
 
 use super::device::{FreeRange, coalesce};
 
-/// Gives the pages of free page reports back to the host with madvise(MADV_DONTNEED).
+/// Gives the pages of free page reports back to the host: madvise(MADV_REMOVE) for guest memory in
+/// a shared file, as vhost-user needs, and madvise(MADV_DONTNEED) for private memory.
 #[derive(Default)]
 pub(super) struct FreePageReclaim;
 
@@ -22,8 +23,15 @@ impl FreePageReclaim {
         ranges: Vec<FreeRange>,
     ) -> bool {
         self.release_with(mem, head, ranges, |range| {
+            let addr = range.host_addr.cast();
             // SAFETY: the range is guest memory, whose contents the guest has given up.
-            unsafe { libc::madvise(range.host_addr.cast(), range.len, libc::MADV_DONTNEED) };
+            // MADV_DONTNEED would only unmap shared pages from this process, leaving them
+            // allocated in the file; MADV_REMOVE frees them, and fails on private memory.
+            unsafe {
+                if libc::madvise(addr, range.len, libc::MADV_REMOVE) != 0 {
+                    libc::madvise(addr, range.len, libc::MADV_DONTNEED);
+                }
+            }
         })
     }
 
@@ -45,7 +53,11 @@ impl FreePageReclaim {
 
 #[cfg(test)]
 mod tests {
-    use vm_memory::{Bytes, GuestAddress};
+    use std::fs::File;
+    use std::os::fd::FromRawFd;
+    use std::os::unix::fs::MetadataExt;
+
+    use vm_memory::{Bytes, FileOffset, GuestAddress};
 
     use super::super::test_util::TestDevice;
     use super::*;
@@ -79,6 +91,35 @@ mod tests {
             let expected = if is_released { 0 } else { 0xff };
             assert!(contents.iter().all(|&b| b == expected), "page {page}");
         }
+    }
+
+    #[test]
+    fn test_released_ranges_of_shared_memory_go_back_to_the_host() {
+        // vhost-user devices need guest memory in a shared memfd, where MADV_DONTNEED only
+        // unmaps pages from the VMM and leaves them allocated in the file.
+        let fd = unsafe { libc::memfd_create(c"guest_mem".as_ptr(), libc::MFD_CLOEXEC) };
+        assert!(fd >= 0);
+        let file = unsafe { File::from_raw_fd(fd) };
+        file.set_len((PAGES * PAGE) as u64).unwrap();
+        let allocated = || file.metadata().unwrap().blocks() * 512;
+        let mem = GuestMemoryMmap::from_ranges_with_files(&[(
+            GuestAddress(0),
+            PAGES * PAGE,
+            Some(FileOffset::new(file.try_clone().unwrap(), 0)),
+        )])
+        .unwrap();
+        mem.write_slice(&vec![0xff; PAGES * PAGE], GuestAddress(0))
+            .unwrap();
+        assert_eq!(allocated(), (PAGES * PAGE) as u64);
+
+        let range = FreeRange::new(&mem, GuestAddress(PAGE as u64), 4 * PAGE).unwrap();
+        assert!(!FreePageReclaim.release(&mem, 0, vec![range]));
+
+        assert_eq!(allocated(), ((PAGES - 4) * PAGE) as u64);
+        let mut contents = vec![0xaa; 4 * PAGE];
+        mem.read_slice(&mut contents, GuestAddress(PAGE as u64))
+            .unwrap();
+        assert!(contents.iter().all(|&b| b == 0));
     }
 
     #[test]
