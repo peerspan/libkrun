@@ -414,9 +414,9 @@ impl Pit {
             let latch_count = (control_word & 0x20) == 0;
             let latch_status = (control_word & 0x10) == 0;
 
-            for i in 0..3 {
+            for (i, counter) in self.counters.iter().enumerate().take(3) {
                 if (control_word & (1 << (i + 1))) != 0 {
-                    let mut ch = self.counters[i].lock().unwrap();
+                    let mut ch = counter.lock().unwrap();
                     if latch_count {
                         ch.latch_counter();
                     }
