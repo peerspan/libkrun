@@ -39,6 +39,11 @@ mod test_vsock_host_close;
 #[cfg(target_os = "linux")]
 use test_vsock_host_close::TestVsockHostClose;
 
+#[cfg(target_os = "linux")]
+mod test_vsock_host_half_close;
+#[cfg(target_os = "linux")]
+use test_vsock_host_half_close::TestVsockHostHalfClose;
+
 #[cfg(any(feature = "host", target_os = "linux"))]
 mod test_vsock_host_connect_refused;
 #[cfg(any(feature = "host", target_os = "linux"))]
@@ -161,6 +166,8 @@ pub fn test_cases() -> Vec<TestCase> {
         TestCase::new("vsock-guest-reconnect", Box::new(TestVsockGuestReconnect)),
         #[cfg(target_os = "linux")]
         TestCase::new("vsock-host-close", Box::new(TestVsockHostClose)),
+        #[cfg(target_os = "linux")]
+        TestCase::new("vsock-host-half-close", Box::new(TestVsockHostHalfClose)),
         #[cfg(any(feature = "host", target_os = "linux"))]
         TestCase::new(
             "vsock-host-connect-refused",

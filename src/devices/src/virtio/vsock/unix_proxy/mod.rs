@@ -39,6 +39,8 @@ pub struct UnixProxy {
     pub(crate) local_port: u32,
     pub(crate) control_port: u32,
     pub(crate) peer_shutdown: u32,
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    pub(crate) local_shutdown: bool,
     pub(crate) peer_fwd_cnt: Wrapping<u32>,
     pub(crate) peer_buf_alloc: u32,
     pub(crate) tx_cnt: Wrapping<u32>,
@@ -73,6 +75,7 @@ impl UnixProxy {
             local_port,
             control_port,
             peer_shutdown: 0,
+            local_shutdown: false,
             peer_fwd_cnt: Wrapping(0),
             peer_buf_alloc: 0,
             tx_cnt: Wrapping(0),
@@ -101,6 +104,7 @@ impl UnixProxy {
             peer_port,
             control_port: 0,
             peer_shutdown: 0,
+            local_shutdown: false,
             fd,
             status: ProxyStatus::ReverseInit,
             mem,
@@ -125,6 +129,24 @@ impl UnixProxy {
         let rx = MuxerRx::Reset {
             local_port: self.local_port,
             peer_port: self.peer_port,
+        };
+
+        push_packet(self.cid, rx, &self.rxq, &self.queue, &self.mem);
+    }
+
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    pub(crate) fn push_shutdown_send(&mut self) {
+        debug!(
+            "push_shutdown_send: id: {}, peer_port: {}, local_port: {}",
+            self.id, self.peer_port, self.local_port
+        );
+
+        self.local_shutdown = true;
+        let rx = MuxerRx::Shutdown {
+            local_port: self.local_port,
+            peer_port: self.peer_port,
+            flags: uapi::VSOCK_FLAGS_SHUTDOWN_SEND,
+            fwd_cnt: self.tx_cnt.0,
         };
 
         push_packet(self.cid, rx, &self.rxq, &self.queue, &self.mem);
