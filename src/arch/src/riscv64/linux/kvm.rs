@@ -587,8 +587,8 @@ mod tests {
             assert!(ids.insert(*id), "duplicate KVM ext id: {id}");
             assert!(names.insert(*name), "duplicate KVM ext name: {name}");
         }
-        // KVM_RISCV_ISA_EXT_MAX in linux-7.2.9 is 78 (ids 0..=77).
-        assert_eq!(KVM_ISA_EXT_TABLE.len(), 78);
+        // Ids 0..=79, through zicfilp and zicfiss.
+        assert_eq!(KVM_ISA_EXT_TABLE.len(), 80);
     }
 
     #[test]
