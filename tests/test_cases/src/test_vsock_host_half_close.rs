@@ -31,7 +31,7 @@ mod host {
     #[cfg(feature = "dynamic-linking")]
     use krun::DeviceManager;
 
-    use std::io::Write;
+    use std::io::{self, Write};
     use std::net::Shutdown;
     use std::os::unix::net::UnixListener;
     use std::thread;
@@ -60,9 +60,9 @@ mod host {
             thread::spawn(move || server(listener));
 
             let init_config = build_init_config(&test_setup.test_case, &[]);
-            let stdin = std::io::stdin();
-            let stdout = std::io::stdout();
-            let stderr = std::io::stderr();
+            let stdin = io::stdin();
+            let stdout = io::stdout();
+            let stderr = io::stderr();
             let (mut devices, payload) =
                 setup_standard_devices(&test_setup, &init_config, &stdin, &stdout, &stderr)?;
             let mut vsock = krun::VsockDevice::new(3, krun::TsiFlags::empty())
