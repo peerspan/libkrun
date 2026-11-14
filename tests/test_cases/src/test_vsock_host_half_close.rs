@@ -1,4 +1,4 @@
-#![cfg(any(feature = "host", target_os = "linux"))]
+#![cfg(target_os = "linux")]
 
 use macros::{guest, host};
 use std::io::Read;

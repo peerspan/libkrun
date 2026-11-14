@@ -39,7 +39,7 @@ pub struct UnixProxy {
     pub(crate) local_port: u32,
     pub(crate) control_port: u32,
     pub(crate) peer_shutdown: u32,
-    #[cfg_attr(windows, allow(dead_code))]
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     pub(crate) local_shutdown: bool,
     pub(crate) peer_fwd_cnt: Wrapping<u32>,
     pub(crate) peer_buf_alloc: u32,
@@ -134,7 +134,7 @@ impl UnixProxy {
         push_packet(self.cid, rx, &self.rxq, &self.queue, &self.mem);
     }
 
-    #[cfg_attr(windows, allow(dead_code))]
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     pub(crate) fn push_shutdown_send(&mut self) {
         debug!(
             "push_shutdown_send: id: {}, peer_port: {}, local_port: {}",

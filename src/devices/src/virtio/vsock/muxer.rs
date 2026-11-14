@@ -42,7 +42,7 @@ pub enum MuxerRx {
         local_port: u32,
         peer_port: u32,
     },
-    #[cfg_attr(windows, allow(dead_code))]
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     Shutdown {
         local_port: u32,
         peer_port: u32,

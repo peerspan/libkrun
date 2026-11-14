@@ -396,7 +396,10 @@ pub(crate) fn process_event(proxy: &mut super::UnixProxy, evset: EventSet) -> Pr
             // A host end that has only shut its write side may still read: pass the end of
             // stream on as a half-close, so what the guest sends after it is not lost. Its EOF
             // stays readable, so watch for the hang-up that ends the stream for good instead.
-            if proxy.status == ProxyStatus::Closed
+            // macOS's epoll emulation reports a hang-up only with write readiness, which would
+            // spin, so there the end of stream still resets the connection.
+            if cfg!(target_os = "linux")
+                && proxy.status == ProxyStatus::Closed
                 && !evset.contains(EventSet::HANG_UP)
                 && !proxy.local_shutdown
                 && proxy.peer_shutdown & super::uapi::VSOCK_FLAGS_SHUTDOWN_SEND == 0
