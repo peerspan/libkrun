@@ -12,6 +12,7 @@ use nix::sys::socket::{
 
 #[cfg(target_os = "macos")]
 use super::super::super::linux_errno::linux_errno_raw;
+use super::super::defs::uapi;
 use super::super::muxer::{MuxerRx, push_packet};
 use super::super::packet::{TsiConnectReq, VsockPacket};
 use super::super::proxy::{
@@ -402,7 +403,7 @@ pub(crate) fn process_event(proxy: &mut super::UnixProxy, evset: EventSet) -> Pr
                 && proxy.status == ProxyStatus::Closed
                 && !evset.contains(EventSet::HANG_UP)
                 && !proxy.local_shutdown
-                && proxy.peer_shutdown & super::uapi::VSOCK_FLAGS_SHUTDOWN_SEND == 0
+                && proxy.peer_shutdown & uapi::VSOCK_FLAGS_SHUTDOWN_SEND == 0
             {
                 debug!(
                     "process_event: endpoint shut its write side: id={}",
