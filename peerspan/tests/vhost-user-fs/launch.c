@@ -6,8 +6,8 @@
 #include <libkrun.h>
 
 static bool push_to_stderr(void *u, KrunStr s) { (void)u; fwrite(s.data, 1, s.len, stderr); return true; }
-static KrunVtableHandle w = KRUN_VTABLE_HANDLE(KRUN_PUSH_STR_TYPE_TAG,
-    ((KrunPushStrVtable){ .drop = NULL, .push = push_to_stderr }), NULL);
+static KrunPushStrVtable stderr_vtable = KRUN_VTABLE(KrunPushStrVtable, .drop = NULL, .push = push_to_stderr);
+static KrunVtableHandle w = KRUN_TEMP_OBJ(KRUN_PUSH_STR_TYPE_TAG, &stderr_vtable, NULL);
 #define CHECK(call) krun_err = NULL; call; if (krun_err) { fprintf(stderr, "%s failed: ", #call); \
     krun_error_message(krun_err, &w); fputc('\n', stderr); return 1; }
 
