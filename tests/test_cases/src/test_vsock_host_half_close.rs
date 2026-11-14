@@ -8,6 +8,7 @@ use std::time::Duration;
 pub struct TestVsockHostHalfClose;
 
 const VSOCK_PORT: u32 = 1234;
+const VERIFIED: &[u8] = b"verified!";
 
 fn stream_set_timeouts(stream: &mut UnixStream) {
     stream
@@ -57,7 +58,12 @@ mod host {
         stream.write_all(b"ping!").unwrap();
         stream.shutdown(Shutdown::Write).unwrap();
         stream_expect_msg(&mut stream, b"pong!");
-        assert_eq!(stream.read(&mut [0]).unwrap(), 0);
+        drop(stream);
+
+        // The guest prints OK only after this, so a reply the host never got fails the test.
+        let (mut done, _addr) = listener.accept().unwrap();
+        stream_set_timeouts(&mut done);
+        done.write_all(VERIFIED).unwrap();
     }
 
     impl Test for TestVsockHostHalfClose {
@@ -113,29 +119,46 @@ mod guest {
     use nix::libc::VMADDR_CID_HOST;
     use nix::sys::socket::{AddressFamily, SockFlag, SockType, VsockAddr, connect, socket};
     use std::io::Write;
-    use std::net::Shutdown;
     use std::os::fd::AsRawFd;
+    use std::thread;
+    use std::time::Instant;
+
+    fn connect_host() -> UnixStream {
+        let sock = socket(
+            AddressFamily::Vsock,
+            SockType::Stream,
+            SockFlag::empty(),
+            None,
+        )
+        .unwrap();
+        connect(
+            sock.as_raw_fd(),
+            &VsockAddr::new(VMADDR_CID_HOST, VSOCK_PORT),
+        )
+        .unwrap();
+        let mut stream = UnixStream::from(sock);
+        stream_set_timeouts(&mut stream);
+        stream
+    }
 
     impl Test for TestVsockHostHalfClose {
         fn in_guest(self: Box<Self>) {
-            let sock = socket(
-                AddressFamily::Vsock,
-                SockType::Stream,
-                SockFlag::empty(),
-                None,
-            )
-            .unwrap();
-            let addr = VsockAddr::new(VMADDR_CID_HOST, VSOCK_PORT);
-            connect(sock.as_raw_fd(), &addr).unwrap();
-            let mut stream = UnixStream::from(sock);
-            stream_set_timeouts(&mut stream);
-
+            let mut stream = connect_host();
             stream_expect_msg(&mut stream, b"ping!");
             // The host shut only its write side: an end of stream, not a reset, and the
             // other direction still carries data.
             assert_eq!(stream.read(&mut [0]).unwrap(), 0);
             stream.write_all(b"pong!").unwrap();
-            stream.shutdown(Shutdown::Write).unwrap();
+
+            stream_expect_msg(&mut connect_host(), VERIFIED);
+
+            // The host has since closed its socket for good, while this one stays open: the
+            // close must still reach the guest.
+            let deadline = Instant::now() + Duration::from_secs(3);
+            while stream.write_all(b"x").is_ok() {
+                assert!(Instant::now() < deadline, "the host's close never arrived");
+                thread::sleep(Duration::from_millis(10));
+            }
 
             println!("OK");
         }

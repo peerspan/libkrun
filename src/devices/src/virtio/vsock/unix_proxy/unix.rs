@@ -394,8 +394,8 @@ pub(crate) fn process_event(proxy: &mut super::UnixProxy, evset: EventSet) -> Pr
             }
 
             // A host end that has only shut its write side may still read: pass the end of
-            // stream on as a half-close, so what the guest sends after it is not lost. Polling
-            // without IN still reports the hang-up that ends the stream for good.
+            // stream on as a half-close, so what the guest sends after it is not lost. Its EOF
+            // stays readable, so watch for the hang-up that ends the stream for good instead.
             if proxy.status == ProxyStatus::Closed
                 && !evset.contains(EventSet::HANG_UP)
                 && !proxy.local_shutdown
@@ -409,7 +409,7 @@ pub(crate) fn process_event(proxy: &mut super::UnixProxy, evset: EventSet) -> Pr
                 proxy.status = ProxyStatus::Connected;
                 proxy.push_shutdown_send();
                 update.signal_queue = true;
-                update.polling = Some((proxy.id, proxy.fd.as_raw_fd(), EventSet::empty()));
+                update.polling = Some((proxy.id, proxy.fd.as_raw_fd(), EventSet::HANG_UP));
                 return update;
             }
 
