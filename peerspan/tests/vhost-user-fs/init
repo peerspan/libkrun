@@ -12,7 +12,12 @@ if mount -t virtiofs peerfs /mnt; then
   echo "written by guest" > /mnt/from-guest.txt
   mkdir -p /mnt/dir/sub && touch /mnt/dir/sub/a
   check nested-dirs $([ -f /mnt/dir/sub/a ] && echo ok)
-  dd if=/dev/urandom of=/mnt/big bs=1M count=64 2>/dev/null; sync
+  if dd if=/dev/urandom of=/mnt/big bs=1M count=64 2>/dev/null && sync \
+      && [ "$(wc -c < /mnt/big)" -eq 67108864 ]; then
+    check big-write ok
+  else
+    check big-write FAIL "write failed or short: $(wc -c < /mnt/big 2>/dev/null) bytes"
+  fi
   A=$(md5sum /mnt/big | cut -d' ' -f1); echo 3 > /proc/sys/vm/drop_caches
   B=$(md5sum /mnt/big | cut -d' ' -f1); echo "BIG $A"
   check reread-after-drop-caches $([ "$A" = "$B" ] && echo ok)

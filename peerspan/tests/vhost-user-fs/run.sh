@@ -65,10 +65,11 @@ while [ "$n" -le "$runs" ]; do
   [ "$rc" -eq 0 ] || problems="$problems launch-exit=$rc"
   grep -q "GUEST DONE" "$work/guest.log" || problems="$problems guest-did-not-finish"
   grep "CHECK .* FAIL" "$work/guest.log" | sed 's/.*CHECK /  guest: /' || true
-  [ "$(grep -c 'CHECK .* ok' "$work/guest.log")" -eq 6 ] || problems="$problems guest-checks"
+  [ "$(grep -c 'CHECK .* ok' "$work/guest.log")" -eq 7 ] || problems="$problems guest-checks"
   [ "$(cat "$share/from-guest.txt" 2>/dev/null)" = "written by guest" ] || problems="$problems host-sees-guest-file"
   [ -f "$share/dir/sub/a" ] || problems="$problems host-sees-nested-dirs"
   big=$(grep -o 'BIG [0-9a-f]*' "$work/guest.log" | cut -d' ' -f2)
+  [ "$(wc -c < "$share/big" 2>/dev/null)" = 67108864 ] || problems="$problems host-size"
   [ -n "$big" ] && [ "$big" = "$(md5sum "$share/big" | cut -d' ' -f1)" ] || problems="$problems host-checksum"
 
   if [ -z "$problems" ]; then
