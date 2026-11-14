@@ -393,6 +393,26 @@ pub(crate) fn process_event(proxy: &mut super::UnixProxy, evset: EventSet) -> Pr
                 update.push_credit_req = Some(rx);
             }
 
+            // A host end that has only shut its write side may still read: pass the end of
+            // stream on as a half-close, so what the guest sends after it is not lost. Polling
+            // without IN still reports the hang-up that ends the stream for good.
+            if proxy.status == ProxyStatus::Closed
+                && !evset.contains(EventSet::HANG_UP)
+                && !proxy.local_shutdown
+                && proxy.peer_shutdown & super::uapi::VSOCK_FLAGS_SHUTDOWN_SEND == 0
+            {
+                debug!(
+                    "process_event: endpoint shut its write side: id={}",
+                    proxy.id
+                );
+
+                proxy.status = ProxyStatus::Connected;
+                proxy.push_shutdown_send();
+                update.signal_queue = true;
+                update.polling = Some((proxy.id, proxy.fd.as_raw_fd(), EventSet::empty()));
+                return update;
+            }
+
             if proxy.status == ProxyStatus::Closed {
                 debug!(
                     "process_event: endpoint closed, sending reset: id={}",
